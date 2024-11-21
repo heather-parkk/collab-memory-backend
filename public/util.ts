@@ -21,10 +21,16 @@ const operations: Operation[] = [
     fields: {},
   },
   {
-    name: "Create User",
+    name: "Create User with Profiling",
     endpoint: "/api/users",
     method: "POST",
-    fields: { username: "input", password: "input" },
+    fields: {
+      username: "input",
+      password: "input",
+      profileResponses: {
+        Goals: "json",
+      },
+    },
   },
   {
     name: "Login",
@@ -43,6 +49,17 @@ const operations: Operation[] = [
     endpoint: "/api/users/password",
     method: "PATCH",
     fields: { currentPassword: "input", newPassword: "input" },
+  },
+  {
+    name: "Update Profile",
+    endpoint: "/api/profiles",
+    method: "PATCH",
+    fields: {
+      updates: {
+        question: "input",
+        selectedChoices: "json",
+      },
+    },
   },
   {
     name: "Delete User",

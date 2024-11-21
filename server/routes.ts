@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Friending, Posting, Sessioning } from "./app";
+import { Authing, Friending, Posting, Profiling, Sessioning } from "./app";
 import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
@@ -33,9 +33,25 @@ class Routes {
   }
 
   @Router.post("/users")
-  async createUser(session: SessionDoc, username: string, password: string) {
+  async createUser(session: SessionDoc, username: string, password: string, profileResponses: Record<string, string[]>) {
     Sessioning.isLoggedOut(session);
-    return await Authing.create(username, password);
+
+    // Create the user
+    const result = await Authing.create(username, password);
+    const user = result.user;
+
+    // Check if user creation was successful
+    if (!user) {
+      throw new Error("User creation failed.");
+    }
+
+    // Add initial profile responses
+    for (const [question, selected] of Object.entries(profileResponses)) {
+      await Profiling.ask(user._id, question, selected);
+    }
+
+    return { msg: "User created successfully!", user };
+    // return await Authing.create(username, password);
   }
 
   @Router.patch("/users/username")
@@ -68,6 +84,34 @@ class Routes {
   async logOut(session: SessionDoc) {
     Sessioning.end(session);
     return { msg: "Logged out!" };
+  }
+
+  /**
+   * Profile Update: Update the profiling responses for a user.
+   */
+  @Router.patch("/profile")
+  @Router.validate(
+    z.object({
+      updates: z.array(
+        z.object({
+          question: z.string(),
+          selectedChoices: z.array(z.string()),
+        }),
+      ),
+    }),
+  )
+  async updateProfile(session: SessionDoc, updates: { question: string; selectedChoices: string[] }[]) {
+    // Get the user ObjectId from the session
+    const userId = Sessioning.getUser(session);
+
+    for (const update of updates) {
+      const { question, selectedChoices } = update;
+
+      // Pass the userId directly
+      await Profiling.updateProfile(userId, question, selectedChoices);
+    }
+
+    return { msg: "Profile updated successfully!" };
   }
 
   @Router.get("/posts")

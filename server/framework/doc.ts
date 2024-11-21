@@ -150,7 +150,14 @@ export default class DocCollection<Schema extends BaseDoc> {
     return one;
   }
 
-  /*
-   * You may wish to add more methods, e.g. using other MongoDB operations!
+  /**
+   * Fully updates a document that matches `filter` with `update`.
+   * Replaces the document fields but keeps internal fields like `_id`, `dateCreated`, and `dateUpdated` updated correctly.
+   * @returns an object describing what was updated
    */
+  async updateOne(filter: Filter<Schema>, update: Partial<Schema>, options?: ReplaceOptions): Promise<UpdateResult<Schema>> {
+    const safe = this.withoutInternal(update); // Prepare the update object
+    safe.dateUpdated = new Date(); // Set the updated timestamp
+    return await this.collection.updateOne(filter, { $set: safe as Partial<Schema> }, options);
+  }
 }
