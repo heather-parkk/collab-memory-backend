@@ -14,33 +14,28 @@ export interface ProfileDoc extends BaseDoc {
 export default class ProfilingConcept {
   public readonly profiles: DocCollection<ProfileDoc>;
 
-  private readonly profilingQuestion = "What are your goals in Fam.ly?";
-  private readonly profilingOptions = ["Learn family history", "Connect more often", "Learn others' interests", "Learn about identity"];
-
   constructor(collectionName: string) {
     this.profiles = new DocCollection<ProfileDoc>(collectionName);
   }
 
   /**
-   * Ask the predefined question and record the user's selected responses.
+   * Ask a question and save the user's selected responses.
    * @param user - The ID of the user.
-   * @param selectedChoices - The choices selected by the user.
+   * @param question - The question being asked.
+   * @param selectedChoices - The user's selected choices.
    */
-  async ask(user: ObjectId, selectedChoices?: string[]) {
-    if (!selectedChoices || selectedChoices.length === 0) return;
-
-    const invalidChoices = selectedChoices.filter((choice) => !this.profilingOptions.includes(choice));
-    if (invalidChoices.length > 0) {
-      throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
+  async ask(user: ObjectId, question: string, selectedChoices: string[]) {
+    if (!question || selectedChoices.length === 0) {
+      throw new Error("Question and selected choices must be provided.");
     }
 
-    const existingProfile = await this.profiles.readOne({ user, question: this.profilingQuestion });
+    const existingProfile = await this.profiles.readOne({ user, question });
     if (existingProfile) {
       await this.profiles.updateOne({ _id: existingProfile._id }, { selectedChoices });
     } else {
       await this.profiles.createOne({
         user,
-        question: this.profilingQuestion,
+        question,
         selectedChoices,
       });
     }
@@ -49,25 +44,36 @@ export default class ProfilingConcept {
   }
 
   /**
-   * Update the user's profiling data for the predefined question.
+   * Update the user's profiling data for a specific question.
    * @param user - The ID of the user.
-   * @param selectedChoices - The updated choices for the user.
+   * @param question - The question to update responses for.
+   * @param selectedChoices - The updated responses for the question.
    */
-  async updateProfile(user: ObjectId, selectedChoices: string[]) {
-    return this.ask(user, selectedChoices); // Reuse the ask method to perform the update.
+  async updateProfile(user: ObjectId, question: string, selectedChoices: string[]) {
+    return this.ask(user, question, selectedChoices); // Reuse the ask method to perform the update.
   }
 
   /**
-   * Retrieve a user's responses for the predefined question.
+   * Retrieve a user's response to a specific question.
    * @param user - The ID of the user.
-   * @returns The selected choices for the predefined question.
+   * @param question - The question to retrieve responses for.
+   * @returns The user's selected choices for the question.
    */
-  async getUserResponses(user: ObjectId) {
-    const profile = await this.profiles.readOne({ user, question: this.profilingQuestion });
+  async getUserResponses(user: ObjectId, question: string) {
+    const profile = await this.profiles.readOne({ user, question });
     if (!profile) {
-      throw new ProfileNotFoundError(user, this.profilingQuestion);
+      throw new ProfileNotFoundError(user, question);
     }
     return profile.selectedChoices;
+  }
+
+  /**
+   * Retrieve all responses for a user.
+   * @param user - The ID of the user.
+   * @returns An array of all questions and their corresponding responses for the user.
+   */
+  async getAllResponses(user: ObjectId) {
+    return await this.profiles.readMany({ user });
   }
 }
 

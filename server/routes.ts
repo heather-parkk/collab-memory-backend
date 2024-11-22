@@ -39,18 +39,19 @@ class Routes {
     z.object({
       username: z.string().min(1),
       password: z.string().min(1),
-      profileResponses: z.array(z.string()).optional(), // Optional profiling responses
+      profileResponses: z.array(z.string()).optional(),
     }),
   )
-  async createUser(
-    session: SessionDoc,
-    username: string,
-    password: string,
-    profileResponses?: string[], // Optional responses
-  ) {
+  async createUser(session: SessionDoc, username: string, password: string, profileResponses?: string[]) {
     Sessioning.isLoggedOut(session);
 
-    // Create the user
+    if (profileResponses && profileResponses.length > 0) {
+      const invalidChoices = profileResponses.filter((choice) => !this.profilingOptions.includes(choice));
+      if (invalidChoices.length > 0) {
+        throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
+      }
+    }
+
     const result = await Authing.create(username, password);
     const user = result.user;
 
@@ -58,13 +59,8 @@ class Routes {
       throw new Error("User creation failed.");
     }
 
-    // Add profiling responses if provided
     if (profileResponses && profileResponses.length > 0) {
-      const invalidChoices = profileResponses.filter((choice) => !this.profilingOptions.includes(choice));
-      if (invalidChoices.length > 0) {
-        throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
-      }
-      await Profiling.ask(user._id, profileResponses);
+      await Profiling.ask(user._id, this.profilingQuestion, profileResponses);
     }
 
     return { msg: "User created successfully!", user };
@@ -114,12 +110,14 @@ class Routes {
   async updateProfile(session: SessionDoc, selectedChoices: string[]) {
     const userId = Sessioning.getUser(session);
 
+    // Validate provided profiling choices
     const invalidChoices = selectedChoices.filter((choice) => !this.profilingOptions.includes(choice));
     if (invalidChoices.length > 0) {
       throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
     }
 
-    await Profiling.updateProfile(userId, selectedChoices);
+    // Update the profile for the specific question
+    await Profiling.updateProfile(userId, this.profilingQuestion, selectedChoices);
 
     return { msg: "Profile updated successfully!" };
   }
