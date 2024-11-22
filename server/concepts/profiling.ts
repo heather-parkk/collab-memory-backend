@@ -14,30 +14,34 @@ export interface ProfileDoc extends BaseDoc {
 export default class ProfilingConcept {
   public readonly profiles: DocCollection<ProfileDoc>;
 
-  /**
-   * Create an instance of Profiling.
-   * @param collectionName - Name of the MongoDB collection.
-   */
+  private readonly profilingQuestion = "What are your goals in Fam.ly?";
+  private readonly profilingOptions = ["Learn family history", "Connect more often", "Learn others' interests", "Learn about identity"];
+
   constructor(collectionName: string) {
     this.profiles = new DocCollection<ProfileDoc>(collectionName);
   }
 
   /**
-   * Ask a question and record the user's selected responses.
+   * Ask the predefined question and record the user's selected responses.
    * @param user - The ID of the user.
-   * @param question - The question being asked.
-   * @param selected - The choices selected by the user.
+   * @param selectedChoices - The choices selected by the user.
    */
-  async ask(user: ObjectId, question: string, selected: string[]) {
-    // Update or create the profile entry.
-    const existingProfile = await this.profiles.readOne({ user, question });
+  async ask(user: ObjectId, selectedChoices?: string[]) {
+    if (!selectedChoices || selectedChoices.length === 0) return;
+
+    const invalidChoices = selectedChoices.filter((choice) => !this.profilingOptions.includes(choice));
+    if (invalidChoices.length > 0) {
+      throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
+    }
+
+    const existingProfile = await this.profiles.readOne({ user, question: this.profilingQuestion });
     if (existingProfile) {
-      await this.profiles.updateOne({ _id: existingProfile._id }, { selectedChoices: selected });
+      await this.profiles.updateOne({ _id: existingProfile._id }, { selectedChoices });
     } else {
       await this.profiles.createOne({
         user,
-        question,
-        selectedChoices: selected,
+        question: this.profilingQuestion,
+        selectedChoices,
       });
     }
 
@@ -45,30 +49,23 @@ export default class ProfilingConcept {
   }
 
   /**
-   * Update the user's profile with specific responses.
+   * Update the user's profiling data for the predefined question.
    * @param user - The ID of the user.
-   * @param question - The question being updated.
-   * @param responses - The new responses to update.
+   * @param selectedChoices - The updated choices for the user.
    */
-  async updateProfile(user: ObjectId, question: string, responses: string[]) {
-    const profile = await this.profiles.readOne({ user, question });
-    if (!profile) {
-      throw new ProfileNotFoundError(user, question);
-    }
-    await this.profiles.updateOne({ _id: profile._id }, { selectedChoices: responses });
-    return { msg: "Profile updated successfully!" };
+  async updateProfile(user: ObjectId, selectedChoices: string[]) {
+    return this.ask(user, selectedChoices); // Reuse the ask method to perform the update.
   }
 
   /**
-   * Retrieve a user's responses for a given question.
+   * Retrieve a user's responses for the predefined question.
    * @param user - The ID of the user.
-   * @param question - The question for which responses are being retrieved.
-   * @returns The selected choices for the given question.
+   * @returns The selected choices for the predefined question.
    */
-  async getUserResponses(user: ObjectId, question: string) {
-    const profile = await this.profiles.readOne({ user, question });
+  async getUserResponses(user: ObjectId) {
+    const profile = await this.profiles.readOne({ user, question: this.profilingQuestion });
     if (!profile) {
-      throw new ProfileNotFoundError(user, question);
+      throw new ProfileNotFoundError(user, this.profilingQuestion);
     }
     return profile.selectedChoices;
   }
@@ -77,11 +74,8 @@ export default class ProfilingConcept {
 /**
  * Error for when a profile entry is not found.
  */
-export class ProfileNotFoundError extends NotFoundError {
-  constructor(
-    public readonly user: ObjectId,
-    public readonly question: string,
-  ) {
-    super("Profile entry for user {0} and question {1} not found!", user, question);
+class ProfileNotFoundError extends NotFoundError {
+  constructor(user: ObjectId, question: string) {
+    super(`Profile entry for user ${user} and question "${question}" not found!`);
   }
 }

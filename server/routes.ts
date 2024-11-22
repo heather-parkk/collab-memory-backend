@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Friending, Posting, Profiling, Sessioning } from "./app";
+import { Authing, Posting, Profiling, Sessioning } from "./app";
 import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
@@ -13,7 +13,9 @@ import { z } from "zod";
  * Web server routes for the app. Implements synchronizations between concepts.
  */
 class Routes {
-  // Synchronize the concepts from `app.ts`.
+  // Profiling question and options
+  private readonly profilingQuestion = "What are your goals in Fam.ly?";
+  private readonly profilingOptions = ["Learn family history", "Connect more often", "Learn others' interests", "Learn about identity"];
 
   @Router.get("/session")
   async getSessionUser(session: SessionDoc) {
@@ -33,25 +35,39 @@ class Routes {
   }
 
   @Router.post("/users")
-  async createUser(session: SessionDoc, username: string, password: string, profileResponses: Record<string, string[]>) {
+  @Router.validate(
+    z.object({
+      username: z.string().min(1),
+      password: z.string().min(1),
+      profileResponses: z.array(z.string()).optional(), // Optional profiling responses
+    }),
+  )
+  async createUser(
+    session: SessionDoc,
+    username: string,
+    password: string,
+    profileResponses?: string[], // Optional responses
+  ) {
     Sessioning.isLoggedOut(session);
 
     // Create the user
     const result = await Authing.create(username, password);
     const user = result.user;
 
-    // Check if user creation was successful
     if (!user) {
       throw new Error("User creation failed.");
     }
 
-    // Add initial profile responses
-    for (const [question, selected] of Object.entries(profileResponses)) {
-      await Profiling.ask(user._id, question, selected);
+    // Add profiling responses if provided
+    if (profileResponses && profileResponses.length > 0) {
+      const invalidChoices = profileResponses.filter((choice) => !this.profilingOptions.includes(choice));
+      if (invalidChoices.length > 0) {
+        throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
+      }
+      await Profiling.ask(user._id, profileResponses);
     }
 
     return { msg: "User created successfully!", user };
-    // return await Authing.create(username, password);
   }
 
   @Router.patch("/users/username")
@@ -92,24 +108,18 @@ class Routes {
   @Router.patch("/profile")
   @Router.validate(
     z.object({
-      updates: z.array(
-        z.object({
-          question: z.string(),
-          selectedChoices: z.array(z.string()),
-        }),
-      ),
+      selectedChoices: z.array(z.string()),
     }),
   )
-  async updateProfile(session: SessionDoc, updates: { question: string; selectedChoices: string[] }[]) {
-    // Get the user ObjectId from the session
+  async updateProfile(session: SessionDoc, selectedChoices: string[]) {
     const userId = Sessioning.getUser(session);
 
-    for (const update of updates) {
-      const { question, selectedChoices } = update;
-
-      // Pass the userId directly
-      await Profiling.updateProfile(userId, question, selectedChoices);
+    const invalidChoices = selectedChoices.filter((choice) => !this.profilingOptions.includes(choice));
+    if (invalidChoices.length > 0) {
+      throw new Error(`Invalid choices: ${invalidChoices.join(", ")}`);
     }
+
+    await Profiling.updateProfile(userId, selectedChoices);
 
     return { msg: "Profile updated successfully!" };
   }
@@ -148,53 +158,6 @@ class Routes {
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
     return Posting.delete(oid);
-  }
-
-  @Router.get("/friends")
-  async getFriends(session: SessionDoc) {
-    const user = Sessioning.getUser(session);
-    return await Authing.idsToUsernames(await Friending.getFriends(user));
-  }
-
-  @Router.delete("/friends/:friend")
-  async removeFriend(session: SessionDoc, friend: string) {
-    const user = Sessioning.getUser(session);
-    const friendOid = (await Authing.getUserByUsername(friend))._id;
-    return await Friending.removeFriend(user, friendOid);
-  }
-
-  @Router.get("/friend/requests")
-  async getRequests(session: SessionDoc) {
-    const user = Sessioning.getUser(session);
-    return await Responses.friendRequests(await Friending.getRequests(user));
-  }
-
-  @Router.post("/friend/requests/:to")
-  async sendFriendRequest(session: SessionDoc, to: string) {
-    const user = Sessioning.getUser(session);
-    const toOid = (await Authing.getUserByUsername(to))._id;
-    return await Friending.sendRequest(user, toOid);
-  }
-
-  @Router.delete("/friend/requests/:to")
-  async removeFriendRequest(session: SessionDoc, to: string) {
-    const user = Sessioning.getUser(session);
-    const toOid = (await Authing.getUserByUsername(to))._id;
-    return await Friending.removeRequest(user, toOid);
-  }
-
-  @Router.put("/friend/accept/:from")
-  async acceptFriendRequest(session: SessionDoc, from: string) {
-    const user = Sessioning.getUser(session);
-    const fromOid = (await Authing.getUserByUsername(from))._id;
-    return await Friending.acceptRequest(fromOid, user);
-  }
-
-  @Router.put("/friend/reject/:from")
-  async rejectFriendRequest(session: SessionDoc, from: string) {
-    const user = Sessioning.getUser(session);
-    const fromOid = (await Authing.getUserByUsername(from))._id;
-    return await Friending.rejectRequest(fromOid, user);
   }
 }
 
