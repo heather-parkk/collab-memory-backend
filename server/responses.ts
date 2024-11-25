@@ -1,6 +1,7 @@
 import { Authing } from "./app";
 import { AlreadyFriendsError, FriendNotFoundError, FriendRequestAlreadyExistsError, FriendRequestDoc, FriendRequestNotFoundError } from "./concepts/friending";
 import { PostAuthorNotMatchError, PostDoc } from "./concepts/posting";
+import { ThreadDoc } from "./concepts/threading";
 import { Router } from "./framework/router";
 
 /**
@@ -36,6 +37,32 @@ export default class Responses {
     const to = requests.map((request) => request.to);
     const usernames = await Authing.idsToUsernames(from.concat(to));
     return requests.map((request, i) => ({ ...request, from: usernames[i], to: usernames[i + requests.length] }));
+  }
+
+  /**
+   * Convert ThreadDoc into more readable format for frontend by converting the ids into usernames.
+   */
+  static async thread(thread: ThreadDoc | null) {
+    if (!thread) {
+      return thread;
+    }
+    const creator = await Authing.getUserById(thread.creator);
+    const members = await Promise.all(
+      thread.members.map(async (m) => {
+        const user = await Authing.getUserById(m);
+        return user?.username; // Handle the case where user might be null/undefined
+      }),
+    );
+    return { ...thread, creator: creator, members: members };
+  }
+
+  /**
+   * Same as {@link threads} but for an array of ThreadDoc for improved performance.
+   */
+  static async threads(threads: ThreadDoc[]) {
+    const creators = await Authing.idsToUsernames(threads.map((thread) => thread.creator));
+    const members = await Promise.all(threads.map((thread) => Authing.idsToUsernames(thread.members)));
+    return threads.map((thread, i) => ({ ...thread, creator: creators[i], members: members[i] }));
   }
 }
 

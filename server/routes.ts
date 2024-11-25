@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 
 import { Router, getExpressRouter } from "./framework/router";
 
-import { Authing, Posting, Profiling, Sessioning } from "./app";
+import { Authing, Posting, Profiling, Sessioning, Threading } from "./app";
 import { PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
@@ -35,6 +35,7 @@ class Routes {
   }
 
   @Router.post("/users")
+  /*
   @Router.validate(
     z.object({
       username: z.string().min(1),
@@ -42,6 +43,7 @@ class Routes {
       profileResponses: z.array(z.string()).optional(),
     }),
   )
+  */
   async createUser(session: SessionDoc, username: string, password: string, profileResponses?: string[]) {
     Sessioning.isLoggedOut(session);
 
@@ -136,9 +138,12 @@ class Routes {
   }
 
   @Router.post("/posts")
-  async createPost(session: SessionDoc, content: string, options?: PostOptions) {
+  async createPost(session: SessionDoc, content: string, thread: ObjectId, options?: PostOptions) {
     const user = Sessioning.getUser(session);
-    const created = await Posting.create(user, content, options);
+    const created = await Posting.create(user, content, thread, options);
+    if (created.post != null) {
+      await Threading.addToThread(created.post._id);
+    }
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
 
@@ -156,6 +161,37 @@ class Routes {
     const oid = new ObjectId(id);
     await Posting.assertAuthorIsUser(oid, user);
     return Posting.delete(oid);
+  }
+
+  //Threading Routes
+  @Router.post("/threads")
+  //Note: removed function to create post when creating a thread!
+  async createThread(session: SessionDoc, title: string, threadContent: Array<ObjectId>, members: Array<ObjectId>) {
+    const user = Sessioning.getUser(session);
+    const thread = await Threading.createThread(user, title, threadContent, members);
+    return { msg: thread.msg, thread: await Responses.thread(thread.thread) };
+  }
+
+  @Router.delete("/threads")
+  async deleteThread(session: SessionDoc, _id: ObjectId) {
+    const user = Sessioning.getUser(session);
+    await Threading.assertCreatorIsUser(_id, user);
+    const thread = await Threading.deleteThread(_id);
+    return { msg: thread.msg };
+  }
+
+  @Router.patch("/threads/:id")
+  async editThreadTitle(session: SessionDoc, _id: ObjectId, title: string) {
+    const user = Sessioning.getUser(session);
+    await Threading.assertCreatorIsUser(_id, user);
+    const thread = await Threading.editThreadTitle(_id, title);
+    return { msg: thread.msg };
+  }
+
+  @Router.get("/thread/:id")
+  async getThreadPosts(_id: ObjectId) {
+    const threads = await Threading.getThreadPosts(_id);
+    return Responses.threads(threads.threads);
   }
 }
 
