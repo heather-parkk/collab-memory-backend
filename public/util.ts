@@ -83,7 +83,7 @@ const operations: Operation[] = [
     name: "Create Post",
     endpoint: "/api/posts",
     method: "POST",
-    fields: { content: "input" },
+    fields: { threadId: "input", content: "input" },
   },
   {
     name: "Update Post",
@@ -95,6 +95,30 @@ const operations: Operation[] = [
     name: "Delete Post",
     endpoint: "/api/posts/:id",
     method: "DELETE",
+    fields: { id: "input" },
+  },
+  {
+    name: "Create Thread",
+    endpoint: "/api/threads",
+    method: "POST",
+    fields: { title: "input", threadContent: "input", members: "input" },
+  },
+  {
+    name: "Delete Thread",
+    endpoint: "/api/threads",
+    method: "DELETE",
+    fields: { id: "input" },
+  },
+  {
+    name: "Edit Thread Title",
+    endpoint: "/api/threads/:id",
+    method: "PATCH",
+    fields: { id: "input", newTitle: "input" },
+  },
+  {
+    name: "Get thread posts",
+    endpoint: "/api/threads/:id",
+    method: "GET",
     fields: { id: "input" },
   },
   //
