@@ -53,7 +53,7 @@ export default class Responses {
         return user?.username; // Handle the case where user might be null/undefined
       }),
     );
-    return { ...thread, creator: creator, members: members };
+    return { ...thread, creator: creator.username, members: members };
   }
 
   /**

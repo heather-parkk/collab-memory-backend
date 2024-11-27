@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { Router, getExpressRouter } from "./framework/router";
 
 import { Authing, Posting, Profiling, Sessioning, Threading } from "./app";
-import { PostOptions } from "./concepts/posting";
+import { PostDoc, PostOptions } from "./concepts/posting";
 import { SessionDoc } from "./concepts/sessioning";
 import Responses from "./responses";
 
@@ -138,11 +138,12 @@ class Routes {
   }
 
   @Router.post("/posts")
-  async createPost(session: SessionDoc, content: string, thread: ObjectId, options?: PostOptions) {
+  async createPost(session: SessionDoc, content: string, id: string, options?: PostOptions) {
     const user = Sessioning.getUser(session);
-    const created = await Posting.create(user, content, thread, options);
+    const threadId = new ObjectId(id);
+    const created = await Posting.create(user, content, threadId, options);
     if (created.post != null) {
-      await Threading.addToThread(created.post._id);
+      await Threading.addToThread(threadId, created.post._id);
     }
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
@@ -166,32 +167,64 @@ class Routes {
   //Threading Routes
   @Router.post("/threads")
   //Note: removed function to create post when creating a thread!
-  async createThread(session: SessionDoc, title: string, threadContent: Array<ObjectId>, members: Array<ObjectId>) {
+  async createThread(session: SessionDoc, title: string, threadContent: Array<string> | null, members: Array<string> | null) {
     const user = Sessioning.getUser(session);
-    const thread = await Threading.createThread(user, title, threadContent, members);
+    let content: Array<ObjectId> = [];
+    let memberList: Array<ObjectId> = [];
+    if (threadContent) {
+      content = threadContent?.map((id) => new ObjectId(id));
+    }
+    if (members) {
+      memberList = members?.map((id) => new ObjectId(id));
+    }
+    const thread = await Threading.createThread(user, title, content, memberList);
     return { msg: thread.msg, thread: await Responses.thread(thread.thread) };
   }
 
   @Router.delete("/threads")
-  async deleteThread(session: SessionDoc, _id: ObjectId) {
+  async deleteThread(session: SessionDoc, id: string) {
     const user = Sessioning.getUser(session);
-    await Threading.assertCreatorIsUser(_id, user);
-    const thread = await Threading.deleteThread(_id);
+    const threadId = new ObjectId(id);
+    const threadContent = await Threading.getThreadContent(threadId);
+    await Threading.assertCreatorIsUser(threadId, user);
+    for (const p of threadContent.content) {
+      Posting.delete(p);
+    }
+    const thread = await Threading.deleteThread(threadId);
     return { msg: thread.msg };
   }
 
   @Router.patch("/threads/:id")
-  async editThreadTitle(session: SessionDoc, _id: ObjectId, title: string) {
+  async editThreadTitle(session: SessionDoc, id: string, title: string) {
     const user = Sessioning.getUser(session);
-    await Threading.assertCreatorIsUser(_id, user);
-    const thread = await Threading.editThreadTitle(_id, title);
+    const threadId = new ObjectId(id);
+    await Threading.assertCreatorIsUser(threadId, user);
+    const thread = await Threading.editThreadTitle(threadId, title);
     return { msg: thread.msg };
   }
 
-  @Router.get("/thread/:id")
-  async getThreadPosts(_id: ObjectId) {
-    const threads = await Threading.getThreadPosts(_id);
-    return Responses.threads(threads.threads);
+  @Router.get("/threads/:id")
+  async getThreadPosts(id: string) {
+    const threadId = new ObjectId(id);
+    const threads = await Threading.getThreadContent(threadId);
+    const posts: Array<PostDoc> = await Posting.getManyPostsById(threads.content);
+    return Responses.posts(posts);
+  }
+
+  @Router.patch("/joinThreads/:id")
+  async joinThread(id: string, session: SessionDoc) {
+    const threadId = new ObjectId(id);
+    const user = Sessioning.getUser(session);
+    const thread = await Threading.joinThread(threadId, user);
+    return { msg: thread.msg };
+  }
+
+  @Router.patch("/leaveThreads/:id")
+  async leaveThread(id: string, session: SessionDoc) {
+    const threadId = new ObjectId(id);
+    const user = Sessioning.getUser(session);
+    const thread = await Threading.leaveThread(threadId, user);
+    return { msg: thread.msg };
   }
 }
 
