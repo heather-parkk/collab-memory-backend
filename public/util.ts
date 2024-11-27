@@ -83,7 +83,7 @@ const operations: Operation[] = [
     name: "Create Post",
     endpoint: "/api/posts",
     method: "POST",
-    fields: { threadId: "input", content: "input" },
+    fields: { id: "input", content: "input" },
   },
   {
     name: "Update Post",
@@ -113,12 +113,24 @@ const operations: Operation[] = [
     name: "Edit Thread Title",
     endpoint: "/api/threads/:id",
     method: "PATCH",
-    fields: { id: "input", newTitle: "input" },
+    fields: { id: "input", title: "input" },
   },
   {
-    name: "Get thread posts",
+    name: "Get Thread Posts",
     endpoint: "/api/threads/:id",
     method: "GET",
+    fields: { id: "input" },
+  },
+  {
+    name: "Join Thread",
+    endpoint: "/api/joinThreads/:id",
+    method: "PATCH",
+    fields: { id: "input" },
+  },
+  {
+    name: "Leave Thread",
+    endpoint: "/api/leaveThreads/:id",
+    method: "PATCH",
     fields: { id: "input" },
   },
   //
