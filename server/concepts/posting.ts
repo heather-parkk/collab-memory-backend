@@ -38,6 +38,11 @@ export default class PostingConcept {
     return await this.posts.readMany({}, { sort: { _id: -1 } });
   }
 
+  async getPostById(_id: ObjectId) {
+    // Returns all posts! You might want to page for better client performance
+    return await this.posts.readOne({ _id });
+  }
+
   async getManyPostsById(_id: ObjectId[]) {
     return await this.posts.readMany({ _id: { $in: _id } });
   }

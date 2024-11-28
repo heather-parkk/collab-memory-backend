@@ -24,7 +24,7 @@ export default class ThreadingConcept {
   }
 
   //creates new thread
-  async createThread(creator: ObjectId, title: string, origContent: Array<ObjectId> | null, origMembers: Array<ObjectId> | null) {
+  async createThread(creator: ObjectId, title: string, origContent: Array<ObjectId>, origMembers: Array<ObjectId>) {
     let content: Array<ObjectId>;
     let members: Array<ObjectId>;
     if (!origContent) {
@@ -74,6 +74,20 @@ export default class ThreadingConcept {
       return { msg: "Post added to thread!" };
     }
     return { msg: "Post unable to be added to thread!" };
+  }
+
+  // Remove post from thread
+  async removeFromThread(_id: ObjectId, itemId: ObjectId) {
+    const thread = await this.threads.readOne({ _id });
+    console.log(thread);
+    console.log(itemId);
+    if (thread != null && thread.content.includes(itemId)) {
+      thread.content = thread.content.filter((id) => id.toString() !== itemId.toString());
+      console.log("t", thread.content);
+      await this.threads.partialUpdateOne({ _id }, { content: thread.content });
+      return { msg: "Post remove from thread!" };
+    }
+    return { msg: "Post unable to be removed from thread!" };
   }
 
   // Join thread (add error if try to join thread already did)
