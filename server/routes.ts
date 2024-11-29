@@ -160,22 +160,29 @@ class Routes {
   async deletePost(session: SessionDoc, id: string) {
     const user = Sessioning.getUser(session);
     const oid = new ObjectId(id);
-    await Posting.assertAuthorIsUser(oid, user);
-    return Posting.delete(oid);
+    const post = await Posting.getPostById(oid);
+    if (post != null) {
+      await Posting.assertAuthorIsUser(oid, user);
+      const threadId = post.thread;
+      console.log(threadId);
+      await Threading.removeFromThread(threadId, oid);
+      return Posting.delete(oid);
+    }
+    return { msg: "Unable to find post to delete!" };
   }
 
   //Threading Routes
   @Router.post("/threads")
   //Note: removed function to create post when creating a thread!
-  async createThread(session: SessionDoc, title: string, threadContent: Array<string> | null, members: Array<string> | null) {
+  async createThread(session: SessionDoc, title: string, threadContent: string, members: string) {
     const user = Sessioning.getUser(session);
     let content: Array<ObjectId> = [];
     let memberList: Array<ObjectId> = [];
     if (threadContent) {
-      content = threadContent?.map((id) => new ObjectId(id));
+      content = threadContent.split(",").map((id) => new ObjectId(id));
     }
     if (members) {
-      memberList = members?.map((id) => new ObjectId(id));
+      memberList = members.split(",").map((id) => new ObjectId(id));
     }
     const thread = await Threading.createThread(user, title, content, memberList);
     return { msg: thread.msg, thread: await Responses.thread(thread.thread) };
